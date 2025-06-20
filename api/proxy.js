@@ -1,6 +1,16 @@
 export default async function handler(req, res) {
+  // Libera CORS para todos os métodos
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  // Responde diretamente a requisição OPTIONS (preflight)
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  // Somente POST permitido além de OPTIONS
   if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Método não permitido" });
   }
 
@@ -12,11 +22,8 @@ export default async function handler(req, res) {
     });
 
     const data = await response.json();
-
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.status(200).json(data);
+    return res.status(200).json(data);
   } catch (err) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 }

@@ -4,6 +4,10 @@
     { "src": "api/proxy.js", "use": "@vercel/node" }
   ],
   "routes": [
-    { "src": "/api", "dest": "/api/proxy.js" }
+    {
+      "src": "/api",
+      "methods": ["GET", "POST", "OPTIONS"],
+      "dest": "/api/proxy.js"
+    }
   ]
 }

@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST" && req.method !== "GET")
     return res.status(405).json({ error: "Método não permitido" });
 
-  const GAS_URL = "https://script.google.com/macros/s/AKfycbxeZd1aI3qfUEm1_Drs5x05liUpu-eHBSIe5CEHuKH9el78SKFwoZNPXdCQ9k03bJNEkQ/exec";
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbxeZd1aI3qfUEm1_Drs5x05liUpu-eHBSIe5CEHuKH9el78SKFwoZNPXdCQ9k03bJNEkQ/exec?token=likehome_2025_admin_token";
   const TOKEN_SECRETO = "likehome_2025_admin_token";
 
   try {

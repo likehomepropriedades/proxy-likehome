@@ -1,49 +1,55 @@
 export default async function handler(req, res) {
+  // CORS headers
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  if (req.method !== "POST" && req.method !== "GET")
+  if (req.method !== "POST" && req.method !== "GET") {
     return res.status(405).json({ error: "Método não permitido" });
+  }
 
-  const GAS_URL = "https://script.google.com/macros/s/AKfycbxeZd1aI3qfUEm1_Drs5x05liUpu-eHBSIe5CEHuKH9el78SKFwoZNPXdCQ9k03bJNEkQ/exec?token=likehome_2025_admin_token";
+  // URL do GAS com token via query string (para GET)
   const TOKEN_SECRETO = "likehome_2025_admin_token";
+  const BASE_GAS_URL = "https://script.google.com/macros/s/AKfycbxeZd1aI3qfUEm1_Drs5x05liUpu-eHBSIe5CEHuKH9el78SKFwoZNPXdCQ9k03bJNEkQ/exec";
+  const GAS_URL = `${BASE_GAS_URL}?token=${TOKEN_SECRETO}`;
 
   try {
     let response;
 
     if (req.method === "POST") {
-      // Adiciona token no corpo do POST
-      const dadosComToken = { ...req.body, token: TOKEN_SECRETO };
+      const bodyComToken = {
+        ...req.body,
+        token: TOKEN_SECRETO
+      };
 
-      response = await fetch(GAS_URL, {
+      response = await fetch(BASE_GAS_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "User-Agent": "Mozilla/5.0 LikeHomeProxy"
+          "User-Agent": "LikeHomeProxy"
         },
-        body: JSON.stringify(dadosComToken),
+        body: JSON.stringify(bodyComToken),
         redirect: "manual"
       });
+
     } else {
-      // Adiciona token na URL do GET
-      const urlComToken = `${GAS_URL}?token=${TOKEN_SECRETO}`;
-      response = await fetch(urlComToken, {
+      // GET com token na URL
+      response = await fetch(GAS_URL, {
         method: "GET",
         headers: {
-          "User-Agent": "Mozilla/5.0 LikeHomeProxy"
+          "User-Agent": "LikeHomeProxy"
         },
         redirect: "manual"
       });
     }
 
-    // Trata redirecionamento para login do Google
+    // Detecta redirecionamento para login do Google (quando o GAS não está público)
     if ([301, 302].includes(response.status)) {
       const location = response.headers.get("location");
       if (location && location.includes("accounts.google.com")) {
-        return res.status(401).json({ error: "Redirecionado para login do Google. Verifique as permissões do GAS." });
+        return res.status(401).json({ error: "Redirecionado para login do Google. Verifique permissões públicas do GAS." });
       }
     }
 

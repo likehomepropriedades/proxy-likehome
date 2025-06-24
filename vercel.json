@@ -1,13 +1,13 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api/proxy.js", "use": "@vercel/node" }
+    { "src": "api/index.js", "use": "@vercel/node" }
   ],
   "routes": [
     {
       "src": "/api",
       "methods": ["GET", "POST", "OPTIONS"],
-      "dest": "/api/proxy.js"
+      "dest": "/api/index.js"
     }
   ]
 }

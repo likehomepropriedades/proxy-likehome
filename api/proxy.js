@@ -1,15 +1,12 @@
 export default async function handler(req, res) {
-  // Libera CORS para todos os métodos usados
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  // Responde preflight OPTIONS
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
-  // Aceita somente POST e GET
   if (req.method !== "POST" && req.method !== "GET") {
     return res.status(405).json({ error: "Método não permitido" });
   }
@@ -37,6 +34,7 @@ export default async function handler(req, res) {
       return res.status(200).json(data);
     }
 
+    // Se não for JSON, retorna texto puro (CSV)
     const text = await response.text();
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     return res.status(200).send(text);

@@ -9,22 +9,28 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Método não permitido" });
 
   const GAS_URL = "https://script.google.com/macros/s/AKfycbxeZd1aI3qfUEm1_Drs5x05liUpu-eHBSIe5CEHuKH9el78SKFwoZNPXdCQ9k03bJNEkQ/exec";
+  const TOKEN_SECRETO = "likehome_2025_admin_token";
 
   try {
     let response;
 
     if (req.method === "POST") {
+      // Adiciona token no corpo do POST
+      const dadosComToken = { ...req.body, token: TOKEN_SECRETO };
+
       response = await fetch(GAS_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 LikeHomeProxy"
         },
-        body: JSON.stringify(req.body),
+        body: JSON.stringify(dadosComToken),
         redirect: "manual"
       });
     } else {
-      response = await fetch(GAS_URL, {
+      // Adiciona token na URL do GET
+      const urlComToken = `${GAS_URL}?token=${TOKEN_SECRETO}`;
+      response = await fetch(urlComToken, {
         method: "GET",
         headers: {
           "User-Agent": "Mozilla/5.0 LikeHomeProxy"

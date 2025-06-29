@@ -1,9 +1,8 @@
-// import { buffer } from 'micro';
-
 export const config = {
   api: {
-    // Se usar buffer do micro, deixar false, senão true
-    bodyParser: true, 
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
   },
 };
 
@@ -14,13 +13,13 @@ const BRANCH = 'main';
 const TOKEN_SECRETO = 'likehome_2025_admin_token';
 
 export default async function handler(req, res) {
-  // CORS para frontend admin em outro domínio
-  res.setHeader('Access-Control-Allow-Origin', '*'); // ou seu domínio exato
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.status(200).end();
+    return;
   }
 
   if (req.method === 'GET') {
@@ -31,14 +30,16 @@ export default async function handler(req, res) {
 
       const text = await response.text();
       res.setHeader('Content-Type', 'text/csv');
-      return res.status(200).send(text);
+      res.status(200).send(text);
     } catch (err) {
-      return res.status(500).json({ error: err.message });
+      res.status(500).json({ error: err.message });
     }
+    return;
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Método não permitido' });
+    res.status(405).json({ error: 'Método não permitido' });
+    return;
   }
 
   let data;
@@ -46,18 +47,21 @@ export default async function handler(req, res) {
     data = req.body;
     if (typeof data === 'string') data = JSON.parse(data);
   } catch {
-    return res.status(400).json({ error: 'JSON inválido' });
+    res.status(400).json({ error: 'JSON inválido' });
+    return;
   }
 
   if (!data.token || data.token !== TOKEN_SECRETO) {
-    return res.status(401).json({ error: 'Token inválido' });
+    res.status(401).json({ error: 'Token inválido' });
+    return;
   }
 
   try {
     if (data.action === 'upload') {
       const { imagemBase64, nomeArquivo, campo } = data;
       if (!imagemBase64 || !nomeArquivo || !campo) {
-        return res.status(400).json({ error: 'Dados incompletos para upload' });
+        res.status(400).json({ error: 'Dados incompletos para upload' });
+        return;
       }
 
       const base64 = imagemBase64.split(',')[1];
@@ -66,20 +70,27 @@ export default async function handler(req, res) {
       const path = `img/${campo}-${timestamp}.${ext}`;
 
       const url = await commitToGitHub(path, base64, `Atualiza imagem ${campo}`);
-      return res.status(200).json({ success: true, imageUrl: url });
+      res.status(200).json({ success: true, imageUrl: url });
+      return;
     }
 
     if (data.action === 'update') {
+      if (!data.csv || typeof data.csv !== 'string') {
+        res.status(400).json({ error: 'CSV inválido' });
+        return;
+      }
+
       const path = `data/dados.csv`;
       const content = Buffer.from('\uFEFF' + data.csv).toString('base64');
       const sha = await commitToGitHub(path, content, 'Atualiza dados.csv', true);
-      return res.status(200).json({ success: true, commitSha: sha });
+      res.status(200).json({ success: true, commitSha: sha });
+      return;
     }
 
-    return res.status(400).json({ error: 'Ação inválida' });
+    res.status(400).json({ error: 'Ação inválida' });
   } catch (err) {
     console.error('Erro no proxy:', err);
-    return res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
 }
 
@@ -94,6 +105,9 @@ async function commitToGitHub(path, base64Content, message, getSha = false) {
     if (resp.ok) {
       const json = await resp.json();
       sha = json.sha;
+    } else if (resp.status !== 404) {
+      const errorText = await resp.text();
+      throw new Error(`Erro GitHub ao obter SHA ${resp.status}: ${errorText}`);
     }
   }
 

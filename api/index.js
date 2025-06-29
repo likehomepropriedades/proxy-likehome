@@ -18,50 +18,67 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
+  // ================================
+  // GET => Lê dados.csv via GitHub API
+  // ================================
   if (req.method === 'GET') {
     try {
-      const url = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/data/dados.csv`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`Erro ao buscar CSV: ${response.status}`);
+      const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/data/dados.csv?ref=${BRANCH}`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${GITHUB_TOKEN}`,
+          'Accept': 'application/vnd.github.v3+json',
+        },
+      });
 
-      const text = await response.text();
+      if (!response.ok) {
+        const msg = await response.text();
+        throw new Error(`Erro ao buscar via API: ${response.status} - ${msg}`);
+      }
+
+      const json = await response.json();
+      const content = Buffer.from(json.content, 'base64').toString('utf-8');
+
       res.setHeader('Content-Type', 'text/csv');
-      res.status(200).send(text);
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).send(content);
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      console.error("Erro GET via API GitHub:", err);
+      return res.status(500).json({ error: err.message });
     }
-    return;
   }
 
+  // ================================
+  // POST => Recebe update ou upload
+  // ================================
   if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Método não permitido' });
-    return;
+    return res.status(405).json({ error: 'Método não permitido' });
   }
 
   let data;
   try {
-    data = req.body;
-    if (typeof data === 'string') data = JSON.parse(data);
+    data = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
   } catch {
-    res.status(400).json({ error: 'JSON inválido' });
-    return;
+    return res.status(400).json({ error: 'JSON inválido' });
   }
 
-  if (!data.token || data.token !== TOKEN_SECRETO) {
-    res.status(401).json({ error: 'Token inválido' });
-    return;
+  // ================================
+  // Segurança por token secreto
+  // ================================
+  if (data.token !== TOKEN_SECRETO) {
+    return res.status(401).json({ error: 'Token inválido' });
   }
 
   try {
+    // Upload de imagem (base64)
     if (data.action === 'upload') {
       const { imagemBase64, nomeArquivo, campo } = data;
+
       if (!imagemBase64 || !nomeArquivo || !campo) {
-        res.status(400).json({ error: 'Dados incompletos para upload' });
-        return;
+        return res.status(400).json({ error: 'Dados incompletos para upload' });
       }
 
       const base64 = imagemBase64.split(',')[1];
@@ -70,30 +87,32 @@ export default async function handler(req, res) {
       const path = `img/${campo}-${timestamp}.${ext}`;
 
       const url = await commitToGitHub(path, base64, `Atualiza imagem ${campo}`);
-      res.status(200).json({ success: true, imageUrl: url });
-      return;
+      return res.status(200).json({ success: true, imageUrl: url });
     }
 
+    // Atualiza dados.csv
     if (data.action === 'update') {
       if (!data.csv || typeof data.csv !== 'string') {
-        res.status(400).json({ error: 'CSV inválido' });
-        return;
+        return res.status(400).json({ error: 'CSV inválido' });
       }
 
       const path = `data/dados.csv`;
       const content = Buffer.from('\uFEFF' + data.csv).toString('base64');
       const sha = await commitToGitHub(path, content, 'Atualiza dados.csv', true);
-      res.status(200).json({ success: true, commitSha: sha });
-      return;
+
+      return res.status(200).json({ success: true, commitSha: sha });
     }
 
-    res.status(400).json({ error: 'Ação inválida' });
+    return res.status(400).json({ error: 'Ação inválida' });
   } catch (err) {
     console.error('Erro no proxy:', err);
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 }
 
+// ================================
+// Função de commit genérico
+// ================================
 async function commitToGitHub(path, base64Content, message, getSha = false) {
   const apiURL = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}`;
 

@@ -13,22 +13,43 @@ const BRANCH = 'main';
 const TOKEN_SECRETO = 'likehome_2025_admin_token';
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' });
+  if (req.method === 'GET') {
+    const url = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/data/dados.csv`;
+    const response = await fetch(url);
+    const text = await response.text();
+    res.setHeader('Content-Type', 'text/csv');
+    return res.status(200).send(text);
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Método não permitido' });
+  }
 
   const rawBody = (await buffer(req)).toString();
-  const data = JSON.parse(rawBody);
+  let data;
+  try {
+    data = JSON.parse(rawBody);
+  } catch (err) {
+    return res.status(400).json({ error: 'JSON inválido' });
+  }
 
   if (!data.token || data.token !== TOKEN_SECRETO) {
     return res.status(401).json({ error: 'Token inválido' });
   }
 
   try {
+    console.log(`[${new Date().toISOString()}] Ação recebida: ${data.action}`);
+
     if (data.action === 'upload') {
       const { imagemBase64, nomeArquivo, campo } = data;
-      if (!imagemBase64 || !nomeArquivo || !campo) return res.status(400).json({ error: 'Dados incompletos' });
+      if (!imagemBase64 || !nomeArquivo || !campo)
+        return res.status(400).json({ error: 'Dados incompletos para upload' });
 
       const base64 = imagemBase64.split(',')[1];
-      const path = `img/${campo}.${nomeArquivo.split('.').pop()}`;
+      const ext = nomeArquivo.split('.').pop();
+      const timestamp = Date.now();
+      const path = `img/${campo}-${timestamp}.${ext}`;
+
       const url = await commitToGitHub(path, base64, `Atualiza imagem ${campo}`);
       return res.status(200).json({ success: true, imageUrl: url });
     }
@@ -42,6 +63,7 @@ export default async function handler(req, res) {
 
     res.status(400).json({ error: 'Ação inválida' });
   } catch (err) {
+    console.error('Erro no proxy:', err);
     res.status(500).json({ error: err.message });
   }
 }
@@ -76,8 +98,11 @@ async function commitToGitHub(path, base64Content, message, getSha = false) {
     body: JSON.stringify(body)
   });
 
-  const result = await res.json();
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Erro GitHub ${res.status}: ${errorText}`);
+  }
 
-  if (!result.content?.path) throw new Error(`Erro ao salvar no GitHub: ${JSON.stringify(result)}`);
+  const result = await res.json();
   return `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/${result.content.path}`;
 }

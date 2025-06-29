@@ -1,8 +1,9 @@
-import { buffer } from 'micro';
+// import { buffer } from 'micro';
 
 export const config = {
   api: {
-    bodyParser: false,
+    // Se usar buffer do micro, deixar false, senão true
+    bodyParser: true, 
   },
 };
 
@@ -13,13 +14,13 @@ const BRANCH = 'main';
 const TOKEN_SECRETO = 'likehome_2025_admin_token';
 
 export default async function handler(req, res) {
-  // --- CORS headers ---
-  res.setHeader('Access-Control-Allow-Origin', '*'); // ou coloque seu domínio específico
+  // CORS para frontend admin em outro domínio
+  res.setHeader('Access-Control-Allow-Origin', '*'); // ou seu domínio exato
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end(); // Resposta rápida para preflight
+    return res.status(200).end();
   }
 
   if (req.method === 'GET') {
@@ -40,16 +41,10 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Método não permitido' });
   }
 
-  let rawBody;
-  try {
-    rawBody = (await buffer(req)).toString();
-  } catch {
-    return res.status(400).json({ error: 'Erro ao ler o corpo da requisição' });
-  }
-
   let data;
   try {
-    data = JSON.parse(rawBody);
+    data = req.body;
+    if (typeof data === 'string') data = JSON.parse(data);
   } catch {
     return res.status(400).json({ error: 'JSON inválido' });
   }
@@ -59,8 +54,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log(`[${new Date().toISOString()}] Ação: ${data.action}`);
-
     if (data.action === 'upload') {
       const { imagemBase64, nomeArquivo, campo } = data;
       if (!imagemBase64 || !nomeArquivo || !campo) {

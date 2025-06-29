@@ -13,23 +13,44 @@ const BRANCH = 'main';
 const TOKEN_SECRETO = 'likehome_2025_admin_token';
 
 export default async function handler(req, res) {
+  // --- CORS headers ---
+  res.setHeader('Access-Control-Allow-Origin', '*'); // ou coloque seu domínio específico
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end(); // Resposta rápida para preflight
+  }
+
   if (req.method === 'GET') {
-    const url = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/data/dados.csv`;
-    const response = await fetch(url);
-    const text = await response.text();
-    res.setHeader('Content-Type', 'text/csv');
-    return res.status(200).send(text);
+    try {
+      const url = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/data/dados.csv`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Erro ao buscar CSV: ${response.status}`);
+
+      const text = await response.text();
+      res.setHeader('Content-Type', 'text/csv');
+      return res.status(200).send(text);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
   }
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Método não permitido' });
   }
 
-  const rawBody = (await buffer(req)).toString();
+  let rawBody;
+  try {
+    rawBody = (await buffer(req)).toString();
+  } catch {
+    return res.status(400).json({ error: 'Erro ao ler o corpo da requisição' });
+  }
+
   let data;
   try {
     data = JSON.parse(rawBody);
-  } catch (err) {
+  } catch {
     return res.status(400).json({ error: 'JSON inválido' });
   }
 
@@ -38,12 +59,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log(`[${new Date().toISOString()}] Ação recebida: ${data.action}`);
+    console.log(`[${new Date().toISOString()}] Ação: ${data.action}`);
 
     if (data.action === 'upload') {
       const { imagemBase64, nomeArquivo, campo } = data;
-      if (!imagemBase64 || !nomeArquivo || !campo)
+      if (!imagemBase64 || !nomeArquivo || !campo) {
         return res.status(400).json({ error: 'Dados incompletos para upload' });
+      }
 
       const base64 = imagemBase64.split(',')[1];
       const ext = nomeArquivo.split('.').pop();
@@ -61,10 +83,10 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, commitSha: sha });
     }
 
-    res.status(400).json({ error: 'Ação inválida' });
+    return res.status(400).json({ error: 'Ação inválida' });
   } catch (err) {
     console.error('Erro no proxy:', err);
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 }
 
@@ -74,7 +96,7 @@ async function commitToGitHub(path, base64Content, message, getSha = false) {
   let sha = null;
   if (getSha) {
     const resp = await fetch(apiURL, {
-      headers: { Authorization: `Bearer ${GITHUB_TOKEN}` }
+      headers: { Authorization: `Bearer ${GITHUB_TOKEN}` },
     });
     if (resp.ok) {
       const json = await resp.json();
@@ -86,16 +108,16 @@ async function commitToGitHub(path, base64Content, message, getSha = false) {
     message,
     content: base64Content,
     branch: BRANCH,
-    ...(sha && { sha })
+    ...(sha && { sha }),
   };
 
   const res = await fetch(apiURL, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${GITHUB_TOKEN}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
